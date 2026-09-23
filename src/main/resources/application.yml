@@ -1,0 +1,85 @@
+spring:
+  application:
+    name: integracion-core-eventos
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      retries: 3
+      acks: all
+      properties:
+        linger.ms: 5
+        batch.size: 16384
+    consumer:
+      group-id: integracion-core-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.pragma.integracion.domain
+        spring.json.value.default.type: com.pragma.integracion.domain.EventoTransaccional
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+camel:
+  springboot:
+    name: IntegracionCoreEventos
+    main-run-controller: true
+    jmx-enabled: true
+    tracing: true
+    producer-template-cache-size: 100
+    consumer-template-cache-size: 100
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 1000ms
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+        recordExceptions:
+          - org.springframework.kafka.KafkaException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+    instances:
+      kafkaPublisher:
+        baseConfig: default
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 500ms
+        retryExceptions:
+          - org.springframework.kafka.KafkaException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+    instances:
+      kafkaPublisher:
+        baseConfig: default
+
+app:
+  eventos:
+    topic-novedades: ${TOPIC_NOVEDADES:novedades-transaccionales}
+    topic-reprocesos: ${TOPIC_REPROCESOS:reprocesos-transaccionales}
+    consumer-group: ${CONSUMER_GROUP:integracion-core-group}
+    idempotencia-ttl: 86400000 # 24 horas en milisegundos
+    batch-size: 100
+    poll-timeout: 100
+    max-poll-records: 500
